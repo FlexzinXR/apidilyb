@@ -1,0 +1,50 @@
+name: Build iOS XCFramework
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build iOS device archive
+        run: |
+          xcodebuild archive \
+            -scheme ShizukuKeyAuth \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/ios_devices.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/derived-device" \
+            SKIP_INSTALL=NO \
+            BUILD_LIBRARY_FOR_DISTRIBUTION=YES
+
+      - name: Build iOS Simulator archive
+        run: |
+          xcodebuild archive \
+            -scheme ShizukuKeyAuth \
+            -destination 'generic/platform=iOS Simulator' \
+            -archivePath "$RUNNER_TEMP/ios_simulator.xcarchive" \
+            -derivedDataPath "$RUNNER_TEMP/derived-simulator" \
+            SKIP_INSTALL=NO \
+            BUILD_LIBRARY_FOR_DISTRIBUTION=YES
+
+      - name: Create XCFramework
+        run: |
+          xcodebuild -create-xcframework \
+            -framework "$RUNNER_TEMP/ios_devices.xcarchive/Products/Library/Frameworks/ShizukuKeyAuth.framework" \
+            -framework "$RUNNER_TEMP/ios_simulator.xcarchive/Products/Library/Frameworks/ShizukuKeyAuth.framework" \
+            -output "$RUNNER_TEMP/ShizukuKeyAuth.xcframework"
+
+      - name: Package artifact
+        run: ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/ShizukuKeyAuth.xcframework" "$RUNNER_TEMP/ShizukuKeyAuth.xcframework.zip"
+
+      - name: Upload XCFramework
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShizukuKeyAuth-xcframework
+          path: ${{ runner.temp }}/ShizukuKeyAuth.xcframework.zip
